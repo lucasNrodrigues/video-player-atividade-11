@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Simulador de Audio",
+  title: "Player de Vídeo",
   description: "Player de música desenvolvido em Next.js para a disciplina de Multimídia.",
 };
 

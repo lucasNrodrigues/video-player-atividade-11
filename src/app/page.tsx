@@ -1,453 +1,467 @@
+/* eslint-disable @next/next/no-img-element */
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
-import Image from 'next/image';
-import { Play, Pause, SkipForward, SkipBack, Volume2, VolumeX, Shuffle, Repeat, RotateCcw, RotateCw } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Play, Pause, Volume2, VolumeX, Maximize, Minimize, SkipForward, SkipBack } from 'lucide-react';
 
-interface Track {
+interface Video {
   id: number;
   title: string;
-  artist: string;
-  duration: number;
+  description: string;
   url: string;
-  cover: string;
+  thumbnail: string;
 }
 
-export default function AudioSimulator() {
-  // ====== ESTADOS ======
-  const [playlist, setPlaylist] = useState<Track[]>([
+export default function VideoPlayer() {
+  // ====== REQUISITO 1: ESTADOS PARA PLAY/PAUSE ======
+  const [videos] = useState<Video[]>([
     {
       id: 1,
-      title: "Sweet child o' mine",
-      artist: "guns n roses",
-      duration: 0,
-      url: "/musica.mp3",
-      cover: "/imagem.png"
+      title: "JVKE - Her (Piano Tutorial-Synthesia+Sheet Music)",
+      description: "Musica POP",
+      url: "/video.mp4",
+      thumbnail: "/thumbnail1.png"
     },
     {
       id: 2,
-      title: "Interstellar X Experience",
-      artist: "Tony Ann",
-      duration: 0,
-      url: "/musica3.mp3",
-      cover: "/imagem3.png"
+      title: "Experience - Ludovico Einaudi - violin cover by Daniel Jang",
+      description: "Musica Classica",
+      url: "/video2.mp4",
+      thumbnail: "/thumbnail2.jpg"
     },
     {
       id: 3,
-      title: "Era Eu",
-      artist: "Felipe Rodrigues",
-      duration: 0,
-      url: "/musica2.mp3",
-      cover: "/imagem2.png"
+      title: "Neto Carvalho l Além do rio azul l Cello cover (Julia vitória)",
+      description: "Musica Gospel",
+      url: "/video3.mp4",
+      thumbnail: "/thumbnail3.jpg"
     }
   ]);
 
-  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+  const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [volume, setVolume] = useState(70);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(70);                    // REQUISITO 2: Estado Volume
   const [isMuted, setIsMuted] = useState(false);
-  const [isShuffleOn, setIsShuffleOn] = useState(false);
-  const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off');
-  
-  const audioRef = useRef<HTMLAudioElement>(null);
-  const currentTrack = playlist[currentTrackIndex];
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showControls, setShowControls] = useState(true);
 
-  // ====== REQUISITO: useEffect para VOLUME ======
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume / 100;
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const currentVideo = videos[currentVideoIndex];
+
+  // ====== FUNÇÕES MEMORIZADAS (useCallback) ======
+
+  // PRÓXIMO VÍDEO
+  const handleNext = useCallback(() => {
+    setCurrentVideoIndex((prev) => (prev + 1) % videos.length);
+    setCurrentTime(0);
+    if (isPlaying && videoRef.current) {
+      setTimeout(() => videoRef.current?.play(), 100);
     }
-  }, [volume, isMuted]);
+  }, [videos.length, isPlaying]);
 
-  // ====== useEffect para EVENTOS DE ÁUDIO ======
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+  // AUTO-HIDE CONTROLS
+  const resetControlsTimeout = useCallback(() => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    if (isPlaying) {
+      controlsTimeoutRef.current = setTimeout(() => {
+        setShowControls(false);
+      }, 3000);
+    }
+  }, [isPlaying]);
 
-    const updateTime = () => setCurrentTime(audio.currentTime);
-    
-    const handleLoadedMetadata = () => {
-      const updatedPlaylist = [...playlist];
-      updatedPlaylist[currentTrackIndex].duration = audio.duration;
-      setPlaylist(updatedPlaylist);
-    };
-    
-    // REQUISITO 5: Reproduzir próxima música automaticamente quando terminar
-    const handleEnded = () => {
-      if (repeatMode === 'one') {
-        audio.currentTime = 0;
-        audio.play();
-      } else if (repeatMode === 'all' || currentTrackIndex < playlist.length - 1) {
-        handleNext();
-      } else {
-        setIsPlaying(false);
-      }
-    };
-
-    audio.addEventListener('timeupdate', updateTime);
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('ended', handleEnded);
-
-    return () => {
-      audio.removeEventListener('timeupdate', updateTime);
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('ended', handleEnded);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTrackIndex, repeatMode]);
-
-  // ====== REQUISITO: PLAY/PAUSE ======
-  const togglePlayPause = () => {
-    if (audioRef.current) {
+  // PLAY/PAUSE
+  const togglePlayPause = useCallback(() => {
+    if (videoRef.current) {
       if (isPlaying) {
-        audioRef.current.pause();
+        videoRef.current.pause();
       } else {
-        audioRef.current.play();
+        videoRef.current.play();
       }
       setIsPlaying(!isPlaying);
     }
-  };
+  }, [isPlaying]);
 
-  // ====== REQUISITO 5: PRÓXIMA MÚSICA ======
-  const handleNext = () => {
-    if (isShuffleOn) {
-      const randomIndex = Math.floor(Math.random() * playlist.length);
-      setCurrentTrackIndex(randomIndex);
-    } else {
-      setCurrentTrackIndex((prev) => (prev + 1) % playlist.length);
-    }
-    setCurrentTime(0);
-    if (isPlaying && audioRef.current) {
-      setTimeout(() => audioRef.current?.play(), 100);
-    }
-  };
-
-  // ====== REQUISITO 5: MÚSICA ANTERIOR ======
-  const handlePrevious = () => {
+  // VÍDEO ANTERIOR
+  const handlePrevious = useCallback(() => {
     if (currentTime > 3) {
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0;
       }
       setCurrentTime(0);
     } else {
-      setCurrentTrackIndex((prev) => (prev - 1 + playlist.length) % playlist.length);
+      setCurrentVideoIndex((prev) => (prev - 1 + videos.length) % videos.length);
       setCurrentTime(0);
-      if (isPlaying && audioRef.current) {
-        setTimeout(() => audioRef.current?.play(), 100);
+      if (isPlaying && videoRef.current) {
+        setTimeout(() => videoRef.current?.play(), 100);
       }
     }
-  };
+  }, [currentTime, videos.length, isPlaying]);
 
-  // ====== REQUISITO 4: CONTROLE DE TEMPO (Slider) ======
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // CONTROLE DE TEMPO
+  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const seekTime = parseFloat(e.target.value);
     setCurrentTime(seekTime);
-    if (audioRef.current) {
-      audioRef.current.currentTime = seekTime;
+    if (videoRef.current) {
+      videoRef.current.currentTime = seekTime;
     }
-  };
+  }, []);
 
-  // ====== REQUISITO 4: AVANÇAR +10 SEGUNDOS ======
-  const skipForward10 = () => {
-    if (audioRef.current) {
-      const newTime = Math.min(audioRef.current.currentTime + 10, currentTrack.duration);
-      audioRef.current.currentTime = newTime;
-      setCurrentTime(newTime);
+  // MUTE/UNMUTE
+  const toggleMute = useCallback(() => {
+    setIsMuted((prev) => !prev);
+  }, []);
+
+  // FULLSCREEN
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      containerRef.current?.requestFullscreen();
+    } else {
+      document.exitFullscreen();
     }
-  };
+  }, []);
 
-  // ====== REQUISITO 4: RETROCEDER -10 SEGUNDOS ======
-  const skipBackward10 = () => {
-    if (audioRef.current) {
-      const newTime = Math.max(audioRef.current.currentTime - 10, 0);
-      audioRef.current.currentTime = newTime;
-      setCurrentTime(newTime);
-    }
-  };
-
-  // ====== REQUISITO: MUTE/UNMUTE ======
-  const toggleMute = () => {
-    setIsMuted(!isMuted);
-  };
-
-  const toggleShuffle = () => {
-    setIsShuffleOn(!isShuffleOn);
-  };
-
-  const cycleRepeat = () => {
-    const modes: Array<'off' | 'all' | 'one'> = ['off', 'all', 'one'];
-    const currentIndex = modes.indexOf(repeatMode);
-    setRepeatMode(modes[(currentIndex + 1) % modes.length]);
-  };
-
-  // ====== REQUISITO 3: FORMATAR TEMPO (MM:SS) ======
-  const formatTime = (seconds: number) => {
+  // FORMATAR TEMPO
+  const formatTime = useCallback((seconds: number) => {
     if (isNaN(seconds)) return '0:00';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  }, []);
 
-  // ====== REQUISITO 2: SELECIONAR MÚSICA DA LISTA ======
-  const selectTrack = (index: number) => {
-    setCurrentTrackIndex(index);
+  // SELECIONAR VÍDEO
+  const selectVideo = useCallback((index: number) => {
+    setCurrentVideoIndex(index);
     setCurrentTime(0);
-    if (isPlaying && audioRef.current) {
-      setTimeout(() => audioRef.current?.play(), 100);
+    if (isPlaying && videoRef.current) {
+      setTimeout(() => videoRef.current?.play(), 100);
     }
-  };
+  }, [isPlaying]);
+
+
+  // ====== EFEITOS (useEffect) ======
+
+  // REQUISITO 2: useEffect para VOLUME
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.volume = isMuted ? 0 : volume / 100;
+    }
+  }, [volume, isMuted]);
+
+  // useEffect para EVENTOS DO VÍDEO
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const updateTime = () => setCurrentTime(video.currentTime);
+    const updateDuration = () => setDuration(video.duration);
+    const handleEnded = () => {
+      setIsPlaying(false);
+      if (currentVideoIndex < videos.length - 1) {
+        handleNext();
+      }
+    };
+
+    video.addEventListener('timeupdate', updateTime);
+    video.addEventListener('loadedmetadata', updateDuration);
+    video.addEventListener('ended', handleEnded);
+
+    return () => {
+      video.removeEventListener('timeupdate', updateTime);
+      video.removeEventListener('loadedmetadata', updateDuration);
+      video.removeEventListener('ended', handleEnded);
+    };
+  }, [currentVideoIndex, videos.length, handleNext]); // ADICIONADO handleNext
+
+  // DETECTAR FULLSCREEN
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  // AUTO-HIDE CONTROLS
+  useEffect(() => {
+    resetControlsTimeout();
+    return () => {
+      if (controlsTimeoutRef.current) {
+        clearTimeout(controlsTimeoutRef.current);
+      }
+    };
+  }, [isPlaying, resetControlsTimeout]); // ADICIONADO resetControlsTimeout
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      <div className="w-full max-w-2xl">
-        <div className="bg-zinc-900 rounded-2xl shadow-2xl overflow-hidden border border-zinc-800">
-          
-          {/* ====== CABEÇALHO ====== */}
-          <div className="bg-gradient-to-r from-zinc-800 to-zinc-900 p-4">
-            <h1 className="text-2xl font-bold text-white mb-1">Player de Áudio Avançado</h1>
-            <p className="text-zinc-400 text-sm">Atividade Prática de Multimídia</p>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+      <div className="w-full max-w-6xl">
 
-          <div className="p-6">
-            
+        {/* ====== CABEÇALHO ====== */}
+        <div className="bg-gradient-to-r from-red-600 to-red-800 rounded-t-2xl p-6 shadow-2xl">
+          <h1 className="text-3xl font-bold text-white mb-2">🎬 Player de Vídeo</h1>
+          <p className="text-red-100">Atividade 10 - Multimídia</p>
+          <p className="text-red-200 text-sm mt-1">Desenvolvido por: Lucas Rodrigues</p>
+        </div>
+
+        <div className="bg-gray-900 rounded-b-2xl shadow-2xl overflow-hidden border-x-2 border-b-2 border-red-900">
+          <div className="grid md:grid-cols-3 gap-6 p-6">
+
             {/* ====== PLAYER PRINCIPAL ====== */}
-            <div className="bg-zinc-800/50 rounded-xl p-6 mb-4 border border-zinc-700">
-              
-              {/* ====== CAPA DO ÁLBUM ====== */}
-              <div className="w-32 h-32 mx-auto mb-4 bg-zinc-700 rounded-xl flex items-center justify-center shadow-xl overflow-hidden relative">
-                <Image 
-                  src={currentTrack.cover} 
-                  alt={currentTrack.title}
-                  fill
-                  className="object-cover"
-                  priority
-                  unoptimized
+            <div className="md:col-span-2">
+              <div
+                ref={containerRef}
+                className="relative bg-black rounded-xl overflow-hidden shadow-2xl group"
+                onMouseMove={resetControlsTimeout}
+                onMouseLeave={() => isPlaying && setShowControls(false)}
+              >
+                {/* ====== REQUISITO 3: TAG VIDEO HTML5 ====== */}
+                <video
+                  ref={videoRef}
+                  src={currentVideo.url}
+                  className="w-full aspect-video object-contain"
+                  onClick={togglePlayPause}
+                  poster={currentVideo.thumbnail}
                 />
-              </div>
 
-              {/* ====== INFORMAÇÕES DA MÚSICA ====== */}
-              <div className="text-center mb-4">
-                <h2 className="text-xl font-bold text-white mb-1">{currentTrack.title}</h2>
-                <p className="text-zinc-400 text-sm">{currentTrack.artist}</p>
-              </div>
+                {/* ====== OVERLAY DE CONTROLES ====== */}
+                <div
+                  className={`absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 transition-opacity duration-300 ${showControls || !isPlaying ? 'opacity-100' : 'opacity-0'
+                    }`}
+                >
+                  {/* ====== TÍTULO DO VÍDEO ====== */}
+                  <div className="absolute top-0 left-0 right-0 p-4">
+                    <h2 className="text-white text-xl font-bold drop-shadow-lg">
+                      {currentVideo.title}
+                    </h2>
+                    <p className="text-gray-300 text-sm">{currentVideo.description}</p>
+                  </div>
 
-              {/* ====== REQUISITO 3 e 4: BARRA DE PROGRESSO E TEMPO ====== */}
-              <div className="mb-4">
-                <input
-                  type="range"
-                  min="0"
-                  max={currentTrack.duration || 1}
-                  step="0.1"
-                  value={currentTime}
-                  onChange={handleSeek}
-                  className="w-full h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer slider"
-                  style={{
-                    background: `linear-gradient(to right, #ffffff 0%, #ffffff ${currentTrack.duration ? (currentTime / currentTrack.duration) * 100 : 0}%, #3f3f46 ${currentTrack.duration ? (currentTime / currentTrack.duration) * 100 : 0}%, #3f3f46 100%)`
-                  }}
-                  title="Arraste para alterar posição da música"
-                />
-                {/* REQUISITO 3: EXIBIÇÃO DO TEMPO ATUAL E TOTAL */}
-                <div className="flex justify-between text-xs text-zinc-400 mt-2">
-                  <span>{formatTime(currentTime)}</span>
-                  <span>{currentTrack.duration ? formatTime(currentTrack.duration) : 'Carregando...'}</span>
+                  {/* ====== BOTÃO PLAY CENTRAL ====== */}
+                  {!isPlaying && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <button
+                        onClick={togglePlayPause}
+                        className="bg-red-600 hover:bg-red-700 text-white rounded-full p-6 shadow-2xl transform hover:scale-110 transition-all"
+                      >
+                        <Play size={48} className="ml-2" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* ====== CONTROLES INFERIORES ====== */}
+                  <div className="absolute bottom-0 left-0 right-0 p-4">
+                    {/* BARRA DE PROGRESSO */}
+                    <input
+                      type="range"
+                      min="0"
+                      max={duration || 1}
+                      step="0.1"
+                      value={currentTime}
+                      onChange={handleSeek}
+                      className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer mb-4"
+                      style={{
+                        background: `linear-gradient(to right, #dc2626 0%, #dc2626 ${duration ? (currentTime / duration) * 100 : 0}%, #374151 ${duration ? (currentTime / duration) * 100 : 0}%, #374151 100%)`
+                      }}
+                    />
+
+                    <div className="flex items-center justify-between gap-4">
+                      {/* CONTROLES ESQUERDA */}
+                      <div className="flex items-center gap-3">
+                        {/* REQUISITO 1: BOTÃO PLAY/PAUSE */}
+                        <button
+                          onClick={togglePlayPause}
+                          className="bg-red-600 hover:bg-red-700 text-white rounded-full p-2 transition-all"
+                          title={isPlaying ? "Pausar" : "Reproduzir"}
+                        >
+                          {isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-0.5" />}
+                        </button>
+
+                        {/* ANTERIOR */}
+                        <button
+                          onClick={handlePrevious}
+                          className="text-white hover:text-red-400 transition-colors"
+                          title="Vídeo Anterior"
+                        >
+                          <SkipBack size={24} />
+                        </button>
+
+                        {/* PRÓXIMO */}
+                        <button
+                          onClick={handleNext}
+                          className="text-white hover:text-red-400 transition-colors"
+                          title="Próximo Vídeo"
+                        >
+                          <SkipForward size={24} />
+                        </button>
+
+                        {/* TEMPO */}
+                        <div className="text-white text-sm font-medium">
+                          {formatTime(currentTime)} / {formatTime(duration)}
+                        </div>
+                      </div>
+
+                      {/* CONTROLES DIREITA */}
+                      <div className="flex items-center gap-3">
+                        {/* REQUISITO 2: CONTROLE DE VOLUME */}
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={toggleMute}
+                            className="text-white hover:text-red-400 transition-colors"
+                            title={isMuted ? "Ativar Som" : "Silenciar"}
+                          >
+                            {isMuted ? <VolumeX size={24} /> : <Volume2 size={24} />}
+                          </button>
+
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={isMuted ? 0 : volume}
+                            onChange={(e) => setVolume(parseInt(e.target.value))}
+                            className="w-24 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                            style={{
+                              background: `linear-gradient(to right, #dc2626 0%, #dc2626 ${isMuted ? 0 : volume}%, #374151 ${isMuted ? 0 : volume}%, #374151 100%)`
+                            }}
+                            title={`Volume: ${isMuted ? 0 : volume}%`}
+                          />
+                        </div>
+
+                        {/* FULLSCREEN */}
+                        <button
+                          onClick={toggleFullscreen}
+                          className="text-white hover:text-red-400 transition-colors"
+                          title={isFullscreen ? "Sair Tela Cheia" : "Tela Cheia"}
+                        >
+                          {isFullscreen ? <Minimize size={24} /> : <Maximize size={24} />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* ====== REQUISITO 4: BOTÕES -10s e +10s ====== */}
-              <div className="flex justify-center gap-2 mb-4">
-                <button
-                  onClick={skipBackward10}
-                  className="px-4 py-2 bg-zinc-700 text-white rounded-lg hover:bg-zinc-600 transition-all flex items-center gap-2"
-                  title="Retroceder 10 segundos"
-                >
-                  <RotateCcw size={16} />
-                  <span className="text-sm">-10s</span>
-                </button>
-                <button
-                  onClick={skipForward10}
-                  className="px-4 py-2 bg-zinc-700 text-white rounded-lg hover:bg-zinc-600 transition-all flex items-center gap-2"
-                  title="Avançar 10 segundos"
-                >
-                  <span className="text-sm">+10s</span>
-                  <RotateCw size={16} />
-                </button>
-              </div>
-
-              {/* ====== CONTROLES PRINCIPAIS ====== */}
-              <div className="flex items-center justify-center gap-3 mb-4">
-                
-                <button
-                  onClick={toggleShuffle}
-                  className={`p-2 rounded-full transition-all ${
-                    isShuffleOn ? 'bg-white text-black' : 'bg-zinc-700 text-white hover:bg-zinc-600'
-                  }`}
-                  aria-label="Shuffle"
-                  title={isShuffleOn ? "Shuffle Ativado" : "Shuffle Desativado"}
-                >
-                  <Shuffle size={16} />
-                </button>
-                
-                {/* REQUISITO 5: BOTÃO MÚSICA ANTERIOR */}
-                <button
-                  onClick={handlePrevious}
-                  className="p-3 bg-zinc-700 text-white rounded-full hover:bg-zinc-600 transition-all"
-                  aria-label="Anterior"
-                  title="Música Anterior"
-                >
-                  <SkipBack size={20} />
-                </button>
-                
-                {/* BOTÃO PLAY/PAUSE */}
-                <button
-                  onClick={togglePlayPause}
-                  className="p-4 bg-white text-black rounded-full hover:scale-105 transition-all shadow-lg"
-                  aria-label={isPlaying ? "Pausar" : "Reproduzir"}
-                  title={isPlaying ? "Pausar" : "Reproduzir"}
-                >
-                  {isPlaying ? <Pause size={24} /> : <Play size={24} className="ml-1" />}
-                </button>
-                
-                {/* REQUISITO 5: BOTÃO PRÓXIMA MÚSICA */}
-                <button
-                  onClick={handleNext}
-                  className="p-3 bg-zinc-700 text-white rounded-full hover:bg-zinc-600 transition-all"
-                  aria-label="Próximo"
-                  title="Próxima Música"
-                >
-                  <SkipForward size={20} />
-                </button>
-                
-                <button
-                  onClick={cycleRepeat}
-                  className={`p-2 rounded-full transition-all relative ${
-                    repeatMode !== 'off' ? 'bg-white text-black' : 'bg-zinc-700 text-white hover:bg-zinc-600'
-                  }`}
-                  aria-label="Repetir"
-                  title={
-                    repeatMode === 'off' ? 'Repetir Desativado' : 
-                    repeatMode === 'all' ? 'Repetir Todas' : 
-                    'Repetir Uma'
-                  }
-                >
-                  <Repeat size={16} />
-                  {repeatMode === 'one' && (
-                    <span className="absolute -top-1 -right-1 text-xs bg-zinc-900 text-white rounded-full w-4 h-4 flex items-center justify-center">1</span>
-                  )}
-                </button>
-              </div>
-
-              {/* ====== CONTROLE DE VOLUME E MUTE ====== */}
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={toggleMute} 
-                  className="text-white hover:text-zinc-300 transition-colors" 
-                  aria-label={isMuted ? "Ativar Som" : "Silenciar"}
-                  title={isMuted ? "Ativar Som" : "Silenciar"}
-                >
-                  {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                </button>
-                
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={isMuted ? 0 : volume}
-                  onChange={(e) => setVolume(parseInt(e.target.value))}
-                  className="flex-1 h-1.5 bg-zinc-700 rounded-lg appearance-none cursor-pointer"
-                  style={{
-                    background: `linear-gradient(to right, #ffffff 0%, #ffffff ${isMuted ? 0 : volume}%, #3f3f46 ${isMuted ? 0 : volume}%, #3f3f46 100%)`
-                  }}
-                  aria-label="Controle de Volume"
-                  title={`Volume: ${isMuted ? 0 : volume}%`}
-                />
-                
-                <span className="text-white text-xs w-10 text-right">
-                  {isMuted ? 0 : volume}%
-                </span>
+              {/* INFORMAÇÕES DO VÍDEO */}
+              <div className="mt-4 bg-gray-800 rounded-lg p-4">
+                <h3 className="text-white text-lg font-bold mb-2">{currentVideo.title}</h3>
+                <p className="text-gray-400 text-sm">{currentVideo.description}</p>
               </div>
             </div>
 
-            {/* ====== REQUISITO 1: LISTAGEM DE MÚSICAS (PELO MENOS 3) ====== */}
-            <div className="bg-zinc-800/30 rounded-xl p-4 border border-zinc-700">
-              <h3 className="text-lg font-bold text-white mb-3">
-                📋 Lista de Músicas ({playlist.length} músicas)
-              </h3>
-              <div className="space-y-2">
-                {/* REQUISITO 2: USUÁRIO PODE SELECIONAR MÚSICA PARA REPRODUZIR */}
-                {playlist.map((track, index) => (
-                  <button
-                    key={track.id}
-                    onClick={() => selectTrack(index)}
-                    className={`w-full p-3 rounded-lg text-left transition-all ${
-                      index === currentTrackIndex
-                        ? 'bg-white text-black'
-                        : 'bg-zinc-800/50 text-white hover:bg-zinc-700'
-                    }`}
-                    title={`Reproduzir: ${track.title}`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-md overflow-hidden bg-zinc-700 flex-shrink-0 relative">
-                          <Image 
-                            src={track.cover} 
-                            alt={track.title}
-                            fill
-                            className="object-cover"
-                            unoptimized
-                          />
-                        </div>
-                        <div>
-                          <div className="font-semibold text-sm flex items-center gap-2">
-                            {index === currentTrackIndex && isPlaying && (
-                              <span className="text-green-500">▶</span>
-                            )}
-                            {track.title}
-                          </div>
-                          <div className={`text-xs ${index === currentTrackIndex ? 'text-zinc-700' : 'text-zinc-400'}`}>
-                            {track.artist}
+            {/* ====== PLAYLIST ====== */}
+            <div className="md:col-span-1">
+              <div className="bg-gray-800 rounded-xl p-4">
+                <h3 className="text-white text-lg font-bold mb-4 flex items-center gap-2">
+                  <span>📺</span> Playlist ({videos.length} vídeos)
+                </h3>
+
+                <div className="space-y-3">
+                  {videos.map((video, index) => (
+                    <button
+                      key={video.id}
+                      onClick={() => selectVideo(index)}
+                      className={`w-full text-left rounded-lg overflow-hidden transition-all ${index === currentVideoIndex
+                          ? 'bg-red-600 shadow-lg transform scale-105'
+                          : 'bg-gray-700 hover:bg-gray-600'
+                        }`}
+                    >
+                      <div className="relative aspect-video bg-gray-900">
+                        {/* THUMBNAIL DO VÍDEO */}
+                        <img
+                          src={video.thumbnail}
+                          alt={video.title}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // Fallback se imagem não carregar
+                            e.currentTarget.style.display = 'none';
+                            e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                        {/* FALLBACK (ícone se não tiver imagem) */}
+                        <div className="hidden absolute inset-0 flex items-center justify-center">
+                          <div className={`text-4xl ${index === currentVideoIndex ? 'text-white' : 'text-gray-600'}`}>
+                            🎬
                           </div>
                         </div>
+                        {index === currentVideoIndex && isPlaying && (
+                          <div className="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded">
+                            ▶ TOCANDO
+                          </div>
+                        )}
                       </div>
-                      {/* REQUISITO 3: MOSTRAR TEMPO TOTAL DA MÚSICA */}
-                      <div className={`text-xs ${index === currentTrackIndex ? 'text-zinc-700' : 'text-zinc-400'}`}>
-                        {track.duration ? formatTime(track.duration) : '--:--'}
+                      <div className="p-3">
+                        <h4 className={`font-semibold text-sm mb-1 ${index === currentVideoIndex ? 'text-white' : 'text-gray-200'
+                          }`}>
+                          {video.title}
+                        </h4>
+                        <p className={`text-xs ${index === currentVideoIndex ? 'text-red-100' : 'text-gray-400'
+                          }`}>
+                          {video.description}
+                        </p>
                       </div>
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* INSTRUÇÕES */}
+              <div className="mt-4 bg-gray-800 rounded-xl p-4">
+                <h3 className="text-white text-sm font-bold mb-2">💡 Instruções</h3>
+                <ul className="text-gray-400 text-xs space-y-1">
+                  <li>• Clique no vídeo para play/pause</li>
+                  <li>• Arraste a barra para navegar</li>
+                  <li>• Use os botões ⏮️ ⏭️ para trocar</li>
+                  <li>• Ajuste o volume com o slider</li>
+                  <li>• Pressione ⛶ para tela cheia</li>
+                </ul>
               </div>
             </div>
           </div>
         </div>
 
-        {/* ====== ELEMENTO AUDIO HTML5 ====== */}
-        <audio ref={audioRef} src={currentTrack.url} />
+        {/* ====== RODAPÉ ====== */}
+        <div className="mt-4 text-center">
+          <p className="text-gray-400 text-sm">
+            ✅ REQUISITO 1: Play/Pause implementado |
+            ✅ REQUISITO 2: Controle de volume funcional |
+            ✅ REQUISITO 3: Tag &lt;video&gt; HTML5 |
+            ✅ REQUISITO 4: Layout responsivo
+          </p>
+          <p className="text-gray-500 text-xs mt-2">
+            Desenvolvido com Next.js + React + TypeScript + Tailwind CSS
+          </p>
+        </div>
 
-        {/* ====== ESTILOS CUSTOMIZADOS PARA SLIDERS ====== */}
-        <style jsx>{`
+        {/* ====== ESTILOS CUSTOMIZADOS ====== */}
+        <style>{`
           input[type="range"]::-webkit-slider-thumb {
             appearance: none;
-            width: 12px;
-            height: 12px;
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
             background: white;
             cursor: pointer;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
           }
           
           input[type="range"]::-moz-range-thumb {
-            width: 12px;
-            height: 12px;
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
             background: white;
             cursor: pointer;
             border: none;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
           }
         `}</style>
       </div>
     </div>
   );
 }
-
