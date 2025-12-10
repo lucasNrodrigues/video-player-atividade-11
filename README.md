@@ -478,10 +478,10 @@ npm run dev
 
 ## 🎓 Informações Acadêmicas
 
-**Disciplina:** Multimídia e Desenvolvimento Web  
-**Instituição:** [Nome da Instituição]  
-**Professor:** [Nome do Professor]  
-**Período:** Novembro/2024  
+**Disciplina:** Multimídia
+**Instituição:** UFERSA  
+**Professor:** REUDISMAM ROLIM DE SOUSA 
+**Período:** 2025.2  
 **Atividade:** 11 - Player de Vídeo Avançado (Continuação)
 
 ---
